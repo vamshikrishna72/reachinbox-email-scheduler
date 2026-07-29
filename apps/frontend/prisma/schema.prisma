@@ -1,0 +1,54 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String           @id @default(uuid())
+  email        String           @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  batches      EmailBatch[]
+  emails       ScheduledEmail[]
+}
+
+model EmailBatch {
+  id               String           @id @default(uuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  userDelaySeconds Int              @default(2)
+  hourlyRateLimit  Int              @default(50)
+  totalEmails      Int              @default(0)
+  sentCount        Int              @default(0)
+  failedCount      Int              @default(0)
+  status           String           @default("SCHEDULED")
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  emails           ScheduledEmail[]
+}
+
+model ScheduledEmail {
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  batchId       String?
+  batch         EmailBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  recipient     String
+  subject       String
+  body          String
+  scheduledAt   DateTime
+  sentAt        DateTime?
+  status        String      @default("SCHEDULED")
+  etherealUrl   String?
+  failureReason String?
+  attempts      Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
