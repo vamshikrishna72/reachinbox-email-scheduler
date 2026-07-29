@@ -1,0 +1,17 @@
+{
+  "name": "reachinbox-scheduler-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:backend": "npm --prefix apps/backend run dev",
+    "dev:frontend": "npm --prefix apps/frontend run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "build": "npm --prefix apps/backend run build && npm --prefix apps/frontend run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
