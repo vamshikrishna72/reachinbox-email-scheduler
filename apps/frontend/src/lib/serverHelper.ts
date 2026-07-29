@@ -1,3 +1,7 @@
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = 'file:/tmp/dev.db';
+}
+
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -5,12 +9,12 @@ import nodemailer from 'nodemailer';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'reachinbox_super_secret_jwt_key_2026_production';
 
-// Global Prisma instance across Next.js serverless functions
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
+    datasourceUrl: process.env.DATABASE_URL,
     log: ['error'],
   });
 
@@ -18,10 +22,62 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 let isSeeded = false;
 
+async function ensureTablesExist() {
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS User (
+        id TEXT PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        passwordHash TEXT NOT NULL,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS EmailBatch (
+        id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL,
+        name TEXT NOT NULL,
+        userDelaySeconds INTEGER DEFAULT 2,
+        hourlyRateLimit INTEGER DEFAULT 50,
+        totalEmails INTEGER DEFAULT 0,
+        sentCount INTEGER DEFAULT 0,
+        failedCount INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'SCHEDULED',
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS ScheduledEmail (
+        id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL,
+        batchId TEXT,
+        recipient TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        body TEXT NOT NULL,
+        scheduledAt DATETIME NOT NULL,
+        sentAt DATETIME,
+        status TEXT DEFAULT 'SCHEDULED',
+        etherealUrl TEXT,
+        failureReason TEXT,
+        attempts INTEGER DEFAULT 0,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+  } catch (e) {
+    console.error('Table init warning:', e);
+  }
+}
+
 // Auto-seed demo account on cold boot
 export async function ensureDemoUserSeeded() {
   if (isSeeded) return;
   try {
+    await ensureTablesExist();
+
     const existing = await prisma.user.findUnique({
       where: { email: 'demo@reachinbox.ai' },
     });
